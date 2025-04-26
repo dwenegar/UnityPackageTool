@@ -1,0 +1,5 @@
+/.vscode/
+/src/upt/bin/
+/src/upt/obj/
+/src/.idea/
+/src/artifacts-dotnet-releaser/
