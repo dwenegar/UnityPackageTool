@@ -9,108 +9,87 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
+using static UnityPackageTool.Utils.PathHelpers;
 
 namespace UnityPackageTool.Utils;
 
-sealed class FileManager(ISimpleLogger logger)
+sealed class FileManager(SimpleLogger logger)
 {
     static readonly JsonSerializerOptions k_JsonSerializerOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         WriteIndented = true,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-        Converters = { new DependencyInfoConverter() }
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingDefault,
+        Converters = { new DependencyListConverter() }
     };
 
-    public bool IsTestFolder(string path)
-        => path.Contains("Tests", StringComparison.Ordinal);
+    public async ValueTask<PackageInfo?> ReadPackageJsonAsync()
+        => await ReadJsonAsync<PackageInfo>("package.json");
 
-    public bool IsPathIgnoredByUnity(string path)
-    {
-        if (path[0] == '.' || path[^1] == '~')
-            return true;
-
-        for (int i = 1, n = path.Length - 1; i < n; i++)
-        {
-            if (path[i] is '/' or '\\' && (path[i - 1] == '~' || path[i + 1] == '.'))
-                return true;
-        }
-
-        return false;
-    }
-
-    public async Task WriteJsonAsync<T>(string path, T value)
-    {
-        logger.Debug($"Writing '{path}'.");
-        var info = new FileInfo(path);
-        CreateDirectory(Path.GetDirectoryName(path));
-        await using FileStream stream = info.OpenWrite();
-        await JsonSerializer.SerializeAsync(stream, value, k_JsonSerializerOptions);
-    }
+    public async ValueTask WritePackageJsonAsync(PackageInfo package)
+        => await WriteJsonAsync("package.json", package);
 
     public async ValueTask<T?> ReadJsonAsync<T>(string path)
     {
-        var info = new FileInfo(path);
-        if (info.Exists)
+        path = Path.GetFullPath(path);
+
+        logger.Debug($"Reading '{path}'.");
+        if (File.Exists(path))
         {
-            logger.Debug($"Reading '{path}'.");
-            await using FileStream stream = info.OpenRead();
+            await using FileStream stream = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.Read);
             return await JsonSerializer.DeserializeAsync<T>(stream, k_JsonSerializerOptions);
         }
 
         return default;
     }
 
-    public async Task WriteTextAsync(string path, string text)
+    public async ValueTask WriteJsonAsync<T>(string path, T value)
     {
+        path = Path.GetFullPath(path);
+
         logger.Debug($"Writing '{path}'.");
-        CreateDirectory(Path.GetDirectoryName(path));
+        EnsureDirectoryExists(path);
+        await using FileStream stream = File.Open(path, FileMode.Create, FileAccess.Write, FileShare.Read);
+        await JsonSerializer.SerializeAsync(stream, value, k_JsonSerializerOptions);
+    }
+
+    public async ValueTask<string> ReadTextAsync(string path)
+    {
+        path = Path.GetFullPath(path);
+
+        logger.Debug($"Reading '{path}'.");
+        return await File.ReadAllTextAsync(path, Encoding.UTF8);
+    }
+
+    public async ValueTask WriteTextAsync(string path, string text)
+    {
+        path = Path.GetFullPath(path);
+
+        logger.Debug($"Writing '{path}'.");
+        EnsureDirectoryExists(path);
         await File.WriteAllTextAsync(path, text, Encoding.UTF8);
     }
 
-    public async Task<string> ReadTextAsync(string path)
-        => await File.ReadAllTextAsync(path, Encoding.UTF8);
-
-    public void MoveFile(string filename, string srcDir, string dstDir)
-        => MoveFile(Path.Combine(srcDir, filename), Path.Combine(dstDir, filename));
-
-    public void MoveFile(string src, string dst)
+    public void CreateDirectory(string? path)
     {
-        if (File.Exists(src))
+        if (path is not null)
         {
-            DeleteFile(dst);
-            File.Move(src, dst);
-        }
+            path = Path.GetFullPath(path);
 
-        void DeleteFile(string path)
-        {
-            if (File.Exists(path))
-                File.Delete(path);
+            logger.Debug($"Creating directory '{path}'.");
+            Directory.CreateDirectory(path);
         }
     }
 
-    public async Task TryCopyFileAsync(string filename, string srcDir, string dstDir)
-        => await TryCopyFileAsync(Path.Combine(srcDir, filename), Path.Combine(dstDir, filename));
-
-    public async Task<bool> TryCopyFileAsync(string src, string dst)
+    public void DeleteDirectory(string path)
     {
-        if (IsPathIgnoredByUnity(src))
-            return false;
+        path = Path.GetFullPath(path);
 
-        var srcInfo = new FileInfo(src);
-        if (!srcInfo.Exists)
-            return false;
-
-        var dstInfo = new FileInfo(dst);
-        logger.Debug($"Copying '{srcInfo.FullName}' to '{dstInfo.FullName}'.");
-
-        if (dstInfo.Directory is { } dstDirectory)
-            dstDirectory.Create();
-
-        await using FileStream srcStream = srcInfo.OpenRead();
-        await using FileStream dstStream = dstInfo.OpenWrite();
-        await srcStream.CopyToAsync(dstStream);
-        return true;
+        if (Directory.Exists(path))
+        {
+            logger.Debug($"Removing directory '{path}'.");
+            Directory.Delete(path, true);
+        }
     }
 
     public async Task<int> CopyDirectoryAsync(string src, string dst, string filter)
@@ -118,48 +97,81 @@ sealed class FileManager(ISimpleLogger logger)
 
     public async Task<int> CopyDirectoryAsync(string src, string dst, string filter, List<string>? files)
     {
+        src = Path.GetFullPath(src);
+        dst = Path.GetFullPath(dst);
+
+        if (!Directory.Exists(src))
+            return 0;
+
         int count = 0;
-        if (Directory.Exists(src))
+        foreach (string file in Directory.EnumerateFiles(src, filter, SearchOption.AllDirectories))
         {
-            foreach (string file in Directory.EnumerateFiles(src, filter, SearchOption.AllDirectories))
+            if (await TryCopyFileAsync(file, file.Replace(src, dst, StringComparison.Ordinal)))
             {
-                if (await TryCopyFileAsync(file, file.Replace(src, dst, StringComparison.Ordinal)))
-                {
-                    files?.Add(file);
-                    count++;
-                }
+                files?.Add(file);
+                count++;
             }
         }
 
         return count;
     }
 
-    public void RemoveIgnoredPaths(string rootPath)
-    {
-        foreach (string path in Directory.GetDirectories(rootPath, ".*", SearchOption.AllDirectories))
-            DeleteDirectory(path);
+    public void MoveFile(string filename, string srcDir, string dstDir)
+        => MoveFile(Path.Combine(srcDir, filename), Path.Combine(dstDir, filename));
 
-        foreach (string path in Directory.GetDirectories(rootPath, "*~", SearchOption.AllDirectories))
-            DeleteDirectory(path);
+    public async Task TryCopyFileToDirectoryAsync(string path, string dst)
+    {
+        string filename = Path.GetFileName(path);
+        await TryCopyFileAsync(path, Path.Combine(dst, filename));
     }
 
-    public void CreateDirectory(string? path)
+    public async ValueTask<bool> CopyAnyAsync(IEnumerable<string> filenames, string destination)
     {
-        logger.Debug($"Creating directory '{path}'.");
-        if (path != null && !Directory.Exists(path))
+        foreach (string filename in filenames)
         {
-            path = Path.GetFullPath(path);
-            Directory.CreateDirectory(path);
+            if (await TryCopyFileAsync(filename, destination))
+                return true;
         }
+
+        return false;
     }
 
-    public void DeleteDirectory(string path)
+    public async ValueTask<bool> TryCopyFileAsync(string src, string dst)
     {
-        var info = new DirectoryInfo(path);
-        if (info.Exists)
-        {
-            logger.Debug($"Removing directory '{path}'.");
-            info.Delete(true);
-        }
+        src = Path.GetFullPath(src);
+        dst = Path.GetFullPath(dst);
+
+        logger.Debug($"Copying '{src}' to '{dst}'.");
+
+        if (IsPathIgnoredByUnity(src))
+            return false;
+
+        if (!File.Exists(src))
+            return false;
+
+        EnsureDirectoryExists(dst);
+
+        await using FileStream srcStream = File.OpenRead(src);
+        await using FileStream dstStream = File.OpenWrite(dst);
+        await srcStream.CopyToAsync(dstStream);
+        return true;
+    }
+
+    void EnsureDirectoryExists(string path)
+    {
+        string? directory = Path.GetDirectoryName(path);
+        if (directory is not null)
+            CreateDirectory(directory);
+    }
+
+    void MoveFile(string src, string dst)
+    {
+        src = Path.GetFullPath(src);
+        dst = Path.GetFullPath(dst);
+
+        logger.Debug($"Moving '{src}' to '{dst}'.");
+
+        if (File.Exists(src))
+            File.Move(src, dst, true);
     }
 }

@@ -5,6 +5,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -50,9 +51,12 @@ sealed class PackageInfo
 record AuthorInfo(string Name, string? Email, string? Url);
 
 [Serializable]
-record DependencyInfo(string Name, string Version);
+record DependencyInfo(string Name, string Version)
+{
+    public override string ToString() => $"{Name}@{Version}";
+}
 
-sealed class DependencyList : IList<DependencyInfo>
+sealed class DependencyList : IEnumerable<DependencyInfo>
 {
     readonly List<DependencyInfo> m_Dependencies = new();
 
@@ -64,33 +68,67 @@ sealed class DependencyList : IList<DependencyInfo>
 
     public int Count => m_Dependencies.Count;
 
-    public bool IsReadOnly => false;
+    IEnumerator IEnumerable.GetEnumerator() => m_Dependencies.GetEnumerator();
 
-    public void Add(DependencyInfo item) => m_Dependencies.Add(item);
+    IEnumerator<DependencyInfo> IEnumerable<DependencyInfo>.GetEnumerator() => m_Dependencies.GetEnumerator();
+
+    public void Add(DependencyInfo dependency) => m_Dependencies.Add(dependency);
 
     public void Clear() => m_Dependencies.Clear();
 
-    public bool Contains(DependencyInfo item) => m_Dependencies.Contains(item);
+    public void Add(string name, string version) => m_Dependencies.Add(new DependencyInfo(name, version));
 
-    public void CopyTo(DependencyInfo[] array, int arrayIndex) => m_Dependencies.CopyTo(array, arrayIndex);
+    public bool TryGet(string name, [NotNullWhen(true)] out DependencyInfo? result)
+    {
+        foreach (DependencyInfo dependency in m_Dependencies)
+        {
+            if (dependency.Name == name)
+            {
+                result = dependency;
+                return true;
+            }
+        }
 
-    public bool Remove(DependencyInfo item) => m_Dependencies.Remove(item);
+        result = null;
+        return false;
+    }
 
-    public int IndexOf(DependencyInfo item) => m_Dependencies.IndexOf(item);
+    public bool TryFindByName(string name, out int index, [NotNullWhen(true)] out DependencyInfo? dependency)
+    {
+        for (index = 0; index < m_Dependencies.Count; index++)
+        {
+            dependency = m_Dependencies[index];
+            if (dependency.Name == name)
+                return true;
+        }
 
-    public void Insert(int index, DependencyInfo item) => m_Dependencies.Insert(index, item);
+        index = -1;
+        dependency = null;
+        return false;
+    }
 
-    public void RemoveAt(int index) => m_Dependencies.RemoveAt(index);
+    public bool TryRemove(string name, [NotNullWhen(true)] out DependencyInfo? result)
+    {
+        for (int i = 0; i < m_Dependencies.Count; i++)
+        {
+            DependencyInfo dependency = m_Dependencies[i];
+            if (dependency.Name == name)
+            {
+                m_Dependencies.RemoveAt(i);
+                result = dependency;
+                return true;
+            }
+        }
 
-    public IEnumerator<DependencyInfo> GetEnumerator() => m_Dependencies.GetEnumerator();
-
-    IEnumerator IEnumerable.GetEnumerator() => ((IEnumerable)m_Dependencies).GetEnumerator();
+        result = null;
+        return false;
+    }
 }
 
 [Serializable]
 record SampleInfo(string DisplayName, string Description, string Path);
 
-sealed class DependencyInfoConverter : JsonConverter<DependencyList>
+sealed class DependencyListConverter : JsonConverter<DependencyList>
 {
     public override DependencyList Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {

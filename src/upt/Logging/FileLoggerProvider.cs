@@ -9,10 +9,8 @@ using System.Text;
 
 namespace UnityPackageTool.Logging;
 
-sealed class FileLoggerProvider(FileLoggerOptions options) : ILoggerProvider
+sealed class FileLoggerProvider(string filePath, LogLevel level) : ILoggerProvider
 {
-    static readonly Encoding k_Utf8NoBom = new UTF8Encoding(false);
-
     List<StreamWriter>? m_StreamWriters;
 
     public void Dispose() => m_StreamWriters?.ForEach(x => x.Dispose());
@@ -20,8 +18,9 @@ sealed class FileLoggerProvider(FileLoggerOptions options) : ILoggerProvider
     public ILogger CreateLogger(string name)
     {
         m_StreamWriters ??= [];
-        var streamWriter = new StreamWriter(options.FilePath, false, k_Utf8NoBom);
+        var utf8NoBom = new UTF8Encoding(false);
+        var streamWriter = new StreamWriter(filePath, false, utf8NoBom);
         m_StreamWriters.Add(streamWriter);
-        return new FileLogger(name, streamWriter, options);
+        return new FileLogger(name, streamWriter, level);
     }
 }

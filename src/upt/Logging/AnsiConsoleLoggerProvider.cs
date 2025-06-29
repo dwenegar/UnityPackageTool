@@ -6,8 +6,9 @@ using Microsoft.Extensions.Logging;
 
 namespace UnityPackageTool.Logging;
 
-class FileLoggerOptions
+sealed class AnsiConsoleLoggerProvider(LogLevel level) : ILoggerProvider
 {
-    public required string FilePath { get; init; }
-    public LogLevel LogLevel { get; init; } = LogLevel.Information;
+    public void Dispose() { }
+
+    public ILogger CreateLogger(string name) => new AnsiConsoleLogger(name, level);
 }

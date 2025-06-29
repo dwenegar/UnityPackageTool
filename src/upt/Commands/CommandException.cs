@@ -6,5 +6,8 @@ using System;
 
 namespace UnityPackageTool.Commands;
 
-sealed class CommandException(string message)
+class CommandException(string message)
     : Exception(message) { }
+
+class CommandValidationException(string message)
+    : CommandException(message) { }

@@ -4,20 +4,23 @@
 
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Spectre.Console;
 using System;
-using System.IO;
-using static UnityPackageTool.Logging.FileFormatter;
+using System.Text;
 
 namespace UnityPackageTool.Logging;
 
-class FileLogger(string name, StreamWriter streamWriter, LogLevel level) : ILogger
+class AnsiConsoleLogger(string name, LogLevel level) : ILogger
 {
+    readonly StringBuilder m_Buffer = new();
+
     public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
     {
         if (IsEnabled(logLevel))
         {
             var logEntry = new LogEntry<TState>(logLevel, name, eventId, state, exception, formatter);
-            Write(streamWriter, logEntry);
+            AnsiConsoleFormatter.Format(logEntry, m_Buffer);
+            AnsiConsole.MarkupLine(m_Buffer.ToString());
         }
     }
 

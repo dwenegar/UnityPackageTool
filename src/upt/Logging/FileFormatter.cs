@@ -5,7 +5,6 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using System;
-using System.Globalization;
 using System.IO;
 
 namespace UnityPackageTool.Logging;
@@ -14,13 +13,9 @@ static class FileFormatter
 {
     public static void Write<TState>(TextWriter textWriter, in LogEntry<TState> logEntry)
     {
-        textWriter.Write(DateTimeOffset.Now.ToString("yyyy/MM/dd HH:mm:ss.fff "));
+        textWriter.Write($"{DateTimeOffset.Now:yyyy/MM/dd HH:mm:ss.fff} ");
         textWriter.Write(GetLogLevelString(logEntry.LogLevel));
-        textWriter.Write(": ");
-        textWriter.Write(logEntry.Category);
-        textWriter.Write('[');
-        textWriter.Write(logEntry.EventId.Id.ToString("###0", CultureInfo.InvariantCulture));
-        textWriter.Write(']');
+        textWriter.Write($": {logEntry.Category}[{logEntry.EventId.Id:###0}]");
 
         string message = logEntry.Formatter(logEntry.State, logEntry.Exception);
         if (message is { Length: > 0 })
@@ -38,7 +33,7 @@ static class FileFormatter
         if (logEntry.Exception?.StackTrace is not null)
             textWriter.Write(logEntry.Exception.StackTrace);
 
-        textWriter.Write(Environment.NewLine);
+        textWriter.WriteLine();
     }
 
     static string GetLogLevelString(LogLevel logLevel) => logLevel switch

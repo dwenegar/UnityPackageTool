@@ -3,11 +3,9 @@
 // For terms of use, see LICENSE.txt
 
 using McMaster.Extensions.CommandLineUtils;
-using Spectre.Console;
 using System;
 using System.Linq;
 using UnityPackageTool;
-using UnityPackageTool.Commands;
 using UnityPackageTool.Utils;
 
 var app = new CommandLineApplication<UnityPackageToolApp>
@@ -20,35 +18,26 @@ app.Conventions.UseDefaultConventions();
 string version = AssemblyHelpers.GetInformationalVersion();
 app.VersionOption("--version", $"{app.Name} {version}", $"{app.Name} {version} - Copyright {DateTime.Now.Year} Simone Livieri");
 
-app.OnValidationError(result =>
-{
-    AnsiConsole.Foreground = ConsoleColor.Red;
-    AnsiConsole.WriteLine(result.ErrorMessage ?? "Unknown error");
-    AnsiConsole.ResetColors();
-    app.ShowHelp();
-    return 1;
-});
-
 try
 {
     return await app.ExecuteAsync(args);
 }
 catch (CommandParsingException ex)
 {
-    Console.Error.WriteLine(ex.Message);
+    await Console.Error.WriteLineAsync(ex.Message);
     if (ex is UnrecognizedCommandParsingException uex && uex.NearestMatches.Any())
     {
-        Console.Error.WriteLine();
-        Console.Error.WriteLine("Did you mean this?");
-        Console.Error.WriteLine("    " + uex.NearestMatches.First());
+        await Console.Error.WriteLineAsync();
+        await Console.Error.WriteLineAsync("The most similar commands are");
+        foreach (string match in uex.NearestMatches)
+            await Console.Error.WriteLineAsync($"        {match}");
     }
 
     return 1;
 }
-catch (CommandException ex)
+catch (Exception e)
 {
-    Console.ForegroundColor = ConsoleColor.Red;
-    Console.Error.WriteLine(ex.Message);
-    Console.ResetColor();
+    await Console.Error.WriteLineAsync($"INTERNAL ERROR: {e.Message}");
+    await Console.Error.WriteLineAsync(e.StackTrace);
     return 1;
 }

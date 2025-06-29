@@ -8,19 +8,19 @@ using Microsoft.Extensions.Logging;
 using System;
 using System.Threading;
 
-sealed class SimpleLogger : ISimpleLogger
+sealed class SimpleLogger(ILogger logger)
 {
-    readonly ILogger m_Logger;
     int m_EventId;
 
-    SimpleLogger(ILogger logger) => m_Logger = logger;
+    public bool HasErrors { get; private set; }
 
-    public static ISimpleLogger CreateLogger(ILoggerFactory factory, string appName)
-        => new SimpleLogger(factory.CreateLogger(appName));
+    public static SimpleLogger CreateLogger(ILoggerFactory factory, string appName)
+        => new(factory.CreateLogger(appName));
 
-    public void Log(LogLevel level, Exception? exception, string? message, params object?[] args)
+    public void Log(LogLevel level, Exception? exception, string message)
     {
+        HasErrors |= level is LogLevel.Error or LogLevel.Critical;
         int id = Interlocked.Increment(ref m_EventId);
-        m_Logger.Log(level, id, exception, message, args);
+        logger.Log(level, id, exception, message);
     }
 }

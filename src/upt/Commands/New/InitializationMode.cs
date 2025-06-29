@@ -2,10 +2,14 @@
 // Unauthorized copying of this file, via any medium is strictly prohibited.
 // For terms of use, see LICENSE.txt
 
-using Microsoft.Extensions.Logging;
 using System;
 
-interface ISimpleLogger
+namespace UnityPackageTool.Commands.New;
+
+[Flags]
+enum InitializationMode
 {
-    void Log(LogLevel level, Exception? exception, string? message, params object?[] args);
+    Editor = 1,
+    Runtime = 2,
+    Default = Editor | Runtime
 }

@@ -7,7 +7,7 @@ using System;
 namespace UnityPackageTool;
 
 [Serializable]
-sealed class DocumentationConfig
+sealed class DocumentationConfiguration
 {
     public string[] DefineConstants { get; set; } = [];
     public string[] Sources { get; set; } = ["**/Editor", "**/Runtime"];

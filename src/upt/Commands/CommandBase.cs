@@ -3,12 +3,11 @@
 // For terms of use, see LICENSE.txt
 
 // ReSharper disable ReplaceAutoPropertyWithComputedProperty
+// ReSharper disable UnassignedGetOnlyAutoProperty
 
 using JetBrains.Annotations;
-using Lunet.Extensions.Logging.SpectreConsole;
 using McMaster.Extensions.CommandLineUtils;
 using Microsoft.Extensions.Logging;
-using Spectre.Console;
 using System;
 using System.IO;
 using System.Threading.Tasks;
@@ -19,42 +18,58 @@ namespace UnityPackageTool.Commands;
 
 abstract class CommandBase
 {
-    [Option("--log-level", Description = "Set the log verbosity.")]
-    LogLevel LogLevel { get; } = LogLevel.Information;
-
-    [Option("--log-file", Description = "Set the log file.")]
-    string? LogFile { get; } = null;
-
     [UsedImplicitly]
     public async Task<int> OnExecuteAsync(CommandLineApplication app)
     {
-        using var factory = new LoggerFactory();
-        factory.AddProvider(new SpectreConsoleLoggerProvider(new SpectreConsoleLoggerOptions
-        {
-            ConsoleSettings = new AnsiConsoleSettings
-            {
-                Out = new AnsiConsoleOutput(Console.Out)
-            },
-            LogLevel = LogLevel,
-            IndentAfterNewLine = false,
-            IncludeTimestamp = true,
-            IncludeNewLineBeforeMessage = false,
-            IncludeCategory = false
-        }));
+        UnityPackageToolApp globalOptions = GetGlobalOptions(app);
 
-        if (LogFile is not null)
+        string workingDirectory = globalOptions.WorkingDirectory;
+        LogLevel logLevel = globalOptions.LogLevel;
+        string? logFile = globalOptions.LogFile;
+
+        using var _ = new DirectoryScope(workingDirectory);
+
+        using var factory = new LoggerFactory();
+        factory.AddProvider(new AnsiConsoleLoggerProvider(logLevel));
+        if (logFile is not null)
         {
-            string logFilePath = Path.GetFullPath(LogFile);
-            factory.AddProvider(new FileLoggerProvider(new FileLoggerOptions
-            {
-                FilePath = logFilePath,
-                LogLevel = LogLevel
-            }));
+            string logFilePath = Path.GetFullPath(logFile);
+            factory.AddProvider(new FileLoggerProvider(logFilePath, logLevel));
         }
 
-        ISimpleLogger logger = SimpleLogger.CreateLogger(factory, AssemblyHelpers.GetAssemblyName());
-        return await ExecuteAsync(logger) ? 0 : 1;
+        var logger = SimpleLogger.CreateLogger(factory, AssemblyHelpers.GetAssemblyName());
+        var fileManager = new FileManager(logger);
+
+        try
+        {
+            ValidateCommand();
+            await ExecuteAsync(fileManager, logger);
+        }
+        catch (CommandException e)
+        {
+            logger.Error(e.Message);
+        }
+        catch (Exception e)
+        {
+            logger.Error("Internal error", e);
+        }
+
+        return logger.HasErrors ? 1 : 0;
     }
 
-    protected abstract Task<bool> ExecuteAsync(ISimpleLogger logger);
+    protected virtual void ValidateCommand() { }
+
+    protected abstract ValueTask ExecuteAsync(FileManager fileManager, SimpleLogger logger);
+
+    static UnityPackageToolApp GetGlobalOptions(CommandLineApplication app)
+    {
+        while (app.Parent is not null)
+        {
+            if (app.Parent is CommandLineApplication<UnityPackageToolApp> parent)
+                return parent.Model;
+            app = app.Parent;
+        }
+
+        throw new Exception("Unexpected error.");
+    }
 }

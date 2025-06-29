@@ -2,24 +2,28 @@
 // Unauthorized copying of this file, via any medium is strictly prohibited.
 // For terms of use, see LICENSE.txt
 
-using JetBrains.Annotations;
 using McMaster.Extensions.CommandLineUtils;
-using System;
-using System.Threading.Tasks;
-using UnityPackageTool.Commands.Init;
+using Microsoft.Extensions.Logging;
+using System.IO;
+using UnityPackageTool.Commands.Dependencies;
+using UnityPackageTool.Commands.Documentation;
+using UnityPackageTool.Commands.New;
+
+// ReSharper disable ClassNeverInstantiated.Global
+// ReSharper disable ReplaceAutoPropertyWithComputedProperty
 
 namespace UnityPackageTool;
 
-#pragma warning disable CA1822
-
-[Subcommand(typeof(NewCommand))]
-sealed class UnityPackageToolApp
+[Subcommand(typeof(NewCommand), typeof(DependenciesCommand), typeof(DocumentationCommand))]
+sealed class UnityPackageToolApp : RootCommandBase
 {
-    [UsedImplicitly]
-    Task<int> OnExecuteAsync(CommandLineApplication app)
-    {
-        Console.WriteLine("Specify a command");
-        app.ShowHelp();
-        return Task.FromResult(1);
-    }
+    [Option("-C", Description = "Path to the working directory")]
+    [DirectoryExists]
+    public string WorkingDirectory { get; } = Directory.GetCurrentDirectory();
+
+    [Option("--log-level", Description = "Set the log verbosity.")]
+    public LogLevel LogLevel { get; } = LogLevel.Information;
+
+    [Option("--log-file", Description = "Set the log file.")]
+    public string? LogFile { get; } = null;
 }
