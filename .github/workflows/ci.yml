@@ -9,18 +9,18 @@ on:
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
 
     steps:
       - name: Should Publish
         if: github.event_name == 'push'
+        shell: bash
         run: |
-          if ( "${{github.ref}}" -match "^refs/tags/[0-9]+\.[0-9]+\.[0-9]+" ) {
-              echo "UPT_PUBLISH=true" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          } else {
-              echo "publish is only enabled by tagging with a release tag"
-          }
-
+          if [[ "$GITHUB_REF" =~ ^refs/tags/[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+            echo "UPT_PUBLISH=true" >> "$GITHUB_ENV"
+          else
+            echo "publish is only enabled by tagging with a release tag"
+          fi
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -33,7 +33,7 @@ jobs:
 
       - name: Build UnityPackageTool
         if: ${{ !env.UPT_PUBLISH }}
-        run: dotnet build src\upt -c Release
+        run: dotnet build src/upt -c Release
 
       - name: Build Packages and Publish
         if: ${{ env.UPT_PUBLISH }}
