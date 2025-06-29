@@ -2,14 +2,14 @@ profile = "custom"
 
 # configuration file for dotnet-releaser
 [msbuild]
-project = "doku.slnx"
+project = "UnityPackageTool.slnx"
 
 [msbuild.properties]
 PublishTrimmed = false
 
 [github]
 user = "dwenegar"
-repo = "doku"
+repo = "UnityPackageTool"
 
 [brew]
 publish = false
