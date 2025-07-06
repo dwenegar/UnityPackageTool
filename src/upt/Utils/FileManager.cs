@@ -58,7 +58,7 @@ sealed class FileManager(SimpleLogger logger)
         path = Path.GetFullPath(path);
 
         logger.Debug($"Reading '{path}'.");
-        return await File.ReadAllTextAsync(path, Encoding.UTF8);
+        return await File.ReadAllTextAsync(path);
     }
 
     public async ValueTask WriteTextAsync(string path, string text)
@@ -67,7 +67,7 @@ sealed class FileManager(SimpleLogger logger)
 
         logger.Debug($"Writing '{path}'.");
         EnsureDirectoryExists(path);
-        await File.WriteAllTextAsync(path, text, Encoding.UTF8);
+        await File.WriteAllTextAsync(path, text);
     }
 
     public void CreateDirectory(string? path)
