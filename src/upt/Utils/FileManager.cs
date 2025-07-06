@@ -20,6 +20,7 @@ sealed class FileManager(SimpleLogger logger)
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         WriteIndented = true,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingDefault,
+        NewLine = "\n",
         Converters = { new DependencyListConverter() }
     };
 
@@ -67,7 +68,7 @@ sealed class FileManager(SimpleLogger logger)
 
         logger.Debug($"Writing '{path}'.");
         EnsureDirectoryExists(path);
-        await File.WriteAllTextAsync(path, text);
+        await File.WriteAllTextAsync(path, text.Replace("\r\n", "\n", StringComparison.Ordinal));
     }
 
     public void CreateDirectory(string? path)
